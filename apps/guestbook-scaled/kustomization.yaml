@@ -1,0 +1,12 @@
+# The same application, four Pods instead of two.
+#
+# This overlay exists so that "change the desired state in Git" is a one-word
+# edit to an Application's `path` -- no write access to this repository needed,
+# which matters because the course cannot assume students have a GitHub account.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../guestbook
+replicas:
+  - name: web
+    count: 4

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels:
+    app: web
+    app.kubernetes.io/part-of: k8s4ops-gitops-demo
+spec:
+  # ClusterIP on purpose: what it is reachable *from* is a networking lesson
+  # elsewhere in the course, not this one.
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

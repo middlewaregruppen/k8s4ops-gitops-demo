@@ -1,0 +1,20 @@
+# The page served by the app. Fetched from Git on every sync, which is what
+# makes a live edit to it show up as drift instead of as a mystery.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: greeting
+  labels:
+    app: web
+    app.kubernetes.io/part-of: k8s4ops-gitops-demo
+data:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><title>k8s4ops gitops demo</title></head>
+      <body>
+        <h1>Served from Git</h1>
+        <p>This page lives in a ConfigMap in a Git repository, not in an image.</p>
+        <p>ArgoCD applied it. Change it in Git, sync, and reload.</p>
+      </body>
+    </html>
