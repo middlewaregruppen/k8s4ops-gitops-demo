@@ -1,0 +1,68 @@
+# The app's front door, for a Kind cluster that runs the Gateway API.
+#
+# `type: ClusterIP` in service.yaml is deliberate — what the Service is reachable
+# *from* is a networking lesson elsewhere in the course. This file is the other half
+# of that sentence: it makes the app reachable from *outside* the cluster, over the
+# one HTTP port the Kind node publishes to the host (host 80 -> node 31000, a
+# NodePort for nginx-gateway-fabric).
+#
+# WHY AN HTTPROUTE AND NOT AN INGRESS
+#
+# On that Kind cluster the published port belongs to the Gateway API fabric, and
+# ingress-nginx binds `hostPort: 80` on the node where nothing maps it to the host.
+# An Ingress is therefore created, syncs successfully, reports a healthy address,
+# and is completely unreachable — `curl http://localhost/` answers 404 from
+# nginx-gateway-fabric. It fails in a way that looks like it worked, which is the
+# worst kind. The Gateway API is the path that actually reaches the host. The full
+# write-up is in the `kind-observability/` directory of the `aks-vscode-course`
+# repo.
+#
+# THIS IS WHY THE BRANCH EXISTS
+#
+# This manifest is Kind-only. `main` does not carry it: the AKS clusters in this
+# course route with ingress-nginx and have no `default` Gateway in the `default`
+# namespace, so a parentRef to one would leave this route Accepted=False forever
+# and the app silently without a front door. Keeping it on `kind-observability`
+# means `main` stays deployable everywhere and this branch is the local variant.
+#
+# No `metadata.namespace`, like the rest of this base: the ArgoCD Application's
+# `destination.namespace` supplies it. That is what keeps this route in the SAME
+# namespace as the Service it targets, which is what lets `backendRefs` name `web`
+# directly — a cross-namespace backendRef would additionally require a
+# ReferenceGrant in the target namespace, and this route would be rejected without
+# one.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: web
+  labels:
+    app: web
+    app.kubernetes.io/part-of: k8s4ops-gitops-demo
+spec:
+  parentRefs:
+    # The cluster's existing Gateway, in its own namespace. It sets
+    # `allowedRoutes.namespaces.from: All`, so a route from the app's namespace may
+    # attach to it without a ReferenceGrant.
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: default
+      namespace: default
+  hostnames:
+    # `*.localhost` resolves to loopback on macOS and Linux with no /etc/hosts
+    # entry, which is why every local route in this course uses it. A made-up name
+    # like `gitops-demo.test` would need a hosts entry on every machine that wants
+    # to open it.
+    - gitops-demo.localhost
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: ""
+          kind: Service
+          name: web
+          # The Service's port, not the container's 8080. The Service maps 80 ->
+          # the named `http` container port.
+          port: 80
+          weight: 1

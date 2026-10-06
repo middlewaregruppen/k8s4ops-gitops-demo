@@ -4,3 +4,8 @@ resources:
   - configmap.yaml
   - deployment.yaml
   - service.yaml
+  # Kind-only, and the reason this file differs on the `kind-observability`
+  # branch: it exposes the app on http://gitops-demo.localhost/ through the
+  # cluster's Gateway. It requires a `default` Gateway in the `default` namespace,
+  # which the AKS clusters in this course do not have — see httproute.yaml.
+  - httproute.yaml
