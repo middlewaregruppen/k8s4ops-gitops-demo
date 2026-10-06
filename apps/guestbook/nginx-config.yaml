@@ -1,0 +1,60 @@
+# The app's nginx server config, replaced so that access logs carry a duration.
+#
+# WHY THIS EXISTS
+#
+# The stock image logs in nginx's `combined` format, which ends at
+# `$http_x_forwarded_for`. That is enough to derive two of the three RED signals
+# from Loki — rate from a count, and errors from `$status` — but there is no way to
+# get duration out of a line that does not contain one. For a static file served by
+# nginx there is also no metrics endpoint, no ServiceMonitor and no trace to fall
+# back on: the access log is the only telemetry this app produces.
+#
+# Adding `$request_time` makes all three derivable, which is what the Grafana RED
+# dashboard for this app queries. Nothing else about the log line changes, so
+# existing queries against the combined fields keep working; the duration is simply
+# appended.
+#
+# WHY `default.conf` AND NOT A SECOND FILE
+#
+# `log_format` has to be at http level, and `/etc/nginx/conf.d/*.conf` is included
+# inside the http block — so a new file there could define the format. What it
+# could NOT do is *replace* the existing access_log: nginx accumulates
+# `access_log` directives declared at the same level, so adding another one at http
+# level would write every request twice, once in each format, and silently double
+# the log volume. A server-level `access_log` *overrides* the inherited one
+# instead, and the server block lives here. So this file takes over
+# `default.conf` (mounted over it by the Deployment) rather than sitting beside it.
+#
+# The server block below is the image's own, with `access_log` added and the
+# commented-out examples dropped. `listen 8080` is not arbitrary: this is the
+# unprivileged image, and it is what lets the Pod run as UID 101.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  labels:
+    app: web
+    app.kubernetes.io/part-of: k8s4ops-gitops-demo
+data:
+  default.conf: |
+    log_format red '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent" "$http_x_forwarded_for" $request_time';
+
+    server {
+        listen       8080;
+        server_name  localhost;
+
+        # Server level, which overrides the http-level `access_log ... main;` in
+        # nginx.conf. Declaring this at http level instead would append a second
+        # destination rather than replace the first.
+        access_log /dev/stdout red;
+
+        location / {
+            root   /usr/share/nginx/html;
+            index  index.html index.htm;
+        }
+
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+            root   /usr/share/nginx/html;
+        }
+    }
